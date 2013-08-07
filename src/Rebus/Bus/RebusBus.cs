@@ -541,11 +541,16 @@ element and use e.g. .Transport(t => t.UseMsmqInOneWayClientMode())"));
         internal void InternalSend(string destination, Message messageToSend)
         {
             log.Info("Sending {0} to {1}", messageToSend, destination);
-
-            var transactionContext = GetTransactionContext();
-
+            ITransactionContext transactionContext = null;
             try
             {
+                if (messageToSend != null && messageToSend.Messages != null && NoTransactionAttributeFound(messageToSend.Messages[0].GetType()))
+                {
+                    transactionContext = new NoTransaction();
+                    log.Info("with no transaction");
+                }
+                else
+                    transactionContext = GetTransactionContext();
                 var transportMessage = serializeMessages.Serialize(messageToSend);
 
                 sendMessages.Send(destination, transportMessage, transactionContext);
@@ -556,6 +561,16 @@ element and use e.g. .Transport(t => t.UseMsmqInOneWayClientMode())"));
                     "An exception occurred while attempting to send {0} to {1} (context: {2})",
                     messageToSend, destination, transactionContext));
             }
+        }
+
+        private bool NoTransactionAttributeFound(Type t)
+        {
+            var attributes = Attribute.GetCustomAttributes(t);
+            return
+                attributes.Any(
+                    x =>
+                    string.Compare(x.GetType().Name, "notransaction", StringComparison.InvariantCultureIgnoreCase) == 0);
+
         }
 
         ITransactionContext GetTransactionContext()
